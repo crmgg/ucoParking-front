@@ -59,7 +59,7 @@
           <span v-if="passwordError" class="error-message">{{ passwordError }}</span>
           <ul class="password-requirements">
             <li :class="{ valid: password.length >= 8 }">Mínimo 8 caracteres</li>
-            <li :class="{ valid: hasUppercase }">Al menos una mayúscula</li>
+            <li :class="{ valid: hasLetter  }">Al menos una letra</li>
             <li :class="{ valid: hasNumberOrSpecial }">Al menos un número o carácter especial</li>
           </ul>
         </div>
@@ -106,6 +106,7 @@
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth0 } from '@auth0/auth0-vue'
+import api from '@/services/api'
 
 const router = useRouter()
 const { loginWithRedirect } = useAuth0()
@@ -139,21 +140,30 @@ const validatePassword = (pwd) => {
   return ''
 }
 
-const handleRegister = () => {
+const handleRegister = async () => {
+
   passwordError.value = validatePassword(password.value)
-  
+
   if (passwordError.value) {
     return
   }
-  
-  if (name.value && studentId.value && email.value && password.value && licensePlate.value) {
-    localStorage.setItem('user', JSON.stringify({ 
-      name: name.value,
+
+  try {
+
+    const response = await api.post('/uco-parking/v1/students', {
       email: email.value,
-      studentId: studentId.value,
-      licensePlate: licensePlate.value
-    }))
+      idNumber: studentId.value,
+      mobileNumber: '3000000000',
+      academicProgram: '11111111-1111-1111-1111-111111111111',
+      idType: '22222222-2222-2222-2222-222222222222'
+    })
+
+    console.log(response.data)
+
     router.push('/dashboard')
+
+  } catch (error) {
+    console.error(error)
   }
 }
 
