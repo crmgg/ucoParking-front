@@ -62,12 +62,22 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth0 } from '@auth0/auth0-vue'
 
 const router = useRouter()
-const { loginWithRedirect } = useAuth0()
+const { loginWithRedirect, isLoading, isAuthenticated } = useAuth0()
+
+watch(
+  [isLoading, isAuthenticated],
+  () => {
+    if (!isLoading.value && isAuthenticated.value) {
+      router.replace({ name: 'dashboard' })
+    }
+  },
+  { immediate: true }
+)
 
 const email = ref('')
 const password = ref('')
