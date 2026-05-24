@@ -1,32 +1,47 @@
 import axios from 'axios'
-
-let getAccessTokenSilently = null
-
-/** Registra getAccessTokenSilently de Auth0 (desde App.vue, antes de las vistas). */
-export function setAccessTokenGetter(getter) {
-  getAccessTokenSilently = getter
-}
+import { getAccessToken } from './auth0Token'
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || ''
 })
 
 api.interceptors.request.use(async (config) => {
-  if (!getAccessTokenSilently) return config
-  const audience = import.meta.env.VITE_AUTH0_AUDIENCE
   try {
-    const token = await getAccessTokenSilently({
-      ...(audience
-        ? { authorizationParams: { audience } }
-        : {})
-    })
+    const token = await getAccessToken()
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
-  } catch {
-    /* sesión Auth0 no disponible o sin consentimiento para el API */
+  } catch (error) {
+    if (import.meta.env.DEV) {
+      console.warn('[Auth0] No se pudo obtener el token:', error?.message || error)
+    }
   }
   return config
 })
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      error.message = 'Sesión inválida o sin permisos para el API. Vuelve a iniciar sesión con Auth0.'
+    }
+    return Promise.reject(error)
+  }
+)
+
+export async function buildAuthHeaders(extraHeaders = {}) {
+  const headers = { ...extraHeaders }
+  try {
+    const token = await getAccessToken()
+    if (token) {
+      headers.Authorization = `Bearer ${token}`
+    }
+  } catch (error) {
+    if (import.meta.env.DEV) {
+      console.warn('[Auth0] No se pudo obtener el token para stream:', error?.message || error)
+    }
+  }
+  return headers
+}
 
 export default api

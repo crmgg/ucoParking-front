@@ -177,11 +177,18 @@ const handleRegister = async () => {
   }
 }
 
+import { getAuth0Audience } from '@/services/auth0Token'
+
+const audience = getAuth0Audience()
+
 const registerWithAuth0 = () => {
   loginWithRedirect({
     authorizationParams: {
+      scope: 'openid profile email',
+      ...(audience ? { audience } : {}),
       screen_hint: 'signup'
-    }
+    },
+    appState: { target: '/dashboard' }
   })
 }
 </script>

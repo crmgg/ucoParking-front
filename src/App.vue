@@ -4,15 +4,21 @@
 </template>
 
 <script setup>
-import { onBeforeMount } from 'vue'
+import { watch } from 'vue'
 import { useAuth0 } from '@auth0/auth0-vue'
-import { setAccessTokenGetter } from '@/services/api'
+import { setAuth0TokenGetter } from '@/services/auth0Token'
 
 const { isLoading, getAccessTokenSilently } = useAuth0()
 
-onBeforeMount(() => {
-  setAccessTokenGetter((options) => getAccessTokenSilently(options))
-})
+watch(
+  isLoading,
+  (loading) => {
+    if (!loading) {
+      setAuth0TokenGetter((options) => getAccessTokenSilently(options))
+    }
+  },
+  { immediate: true }
+)
 </script>
 
 <style scoped>

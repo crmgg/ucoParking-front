@@ -76,6 +76,9 @@
           </div>
         </div>
 
+        <p v-if="errorMessage" class="plate-error" style="margin-bottom: 1rem;">{{ errorMessage }}</p>
+        <p v-if="loading && !parkingSpots.length" class="header-subtitle">Cargando parqueaderos...</p>
+
         <div class="parking-grid">
           <div 
             v-for="spot in parkingSpots" 
@@ -170,9 +173,9 @@
           </div>
         </div>
         <div class="modal-actions">
-          <button @click="closeModal" class="btn btn-secondary">Cancelar</button>
-          <button @click="confirmAction" class="btn btn-primary">
-            {{ selectedSpot?.status === 'available' ? 'Reservar' : 'Confirmar' }}
+          <button @click="closeModal" class="btn btn-secondary" :disabled="loading">Cancelar</button>
+          <button @click="confirmAction" class="btn btn-primary" :disabled="loading">
+            {{ loading ? 'Procesando...' : (selectedSpot?.status === 'available' ? 'Reservar' : 'Confirmar') }}
           </button>
         </div>
       </div>
@@ -181,12 +184,16 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, watch, onUnmounted } from 'vue'
 import { useAuth0 } from '@auth0/auth0-vue'
+import {
+  fetchParkingSpaces,
+  reserveParkingSpace,
+  subscribeParkingSpaceStream,
+  mergeSpotUpdate
+} from '@/services/parkingService'
 
-const router = useRouter()
-const { user, isAuthenticated, logout } = useAuth0()
+const { user, isAuthenticated, isLoading, logout } = useAuth0()
 
 const showModal = ref(false)
 const selectedSpot = ref(null)
@@ -195,6 +202,19 @@ const plateError = ref('')
 const startTime = ref('')
 const endTime = ref('')
 const timeError = ref('')
+const loading = ref(false)
+const errorMessage = ref('')
+const parkingSpots = ref([])
+let unsubscribeStream = null
+
+const studentProfile = computed(() => {
+  if (!isAuthenticated.value || !user.value) return null
+  return {
+    id: user.value.sub,
+    name: user.value.name || user.value.email || 'Estudiante',
+    email: user.value.email
+  }
+})
 
 const timeOptions = [
   '07:00', '07:30', '08:00', '08:30', '09:00', '09:30',
@@ -204,26 +224,11 @@ const timeOptions = [
   '19:00', '19:30', '20:00', '20:30', '21:00', '21:40'
 ]
 
-const parkingSpots = ref([
-  { id: 'A1', status: 'available' },
-  { id: 'A2', status: 'occupied' },
-  { id: 'A3', status: 'available' },
-  { id: 'A4', status: 'available' },
-  { id: 'A5', status: 'occupied' },
-  { id: 'B1', status: 'available' },
-  { id: 'B2', status: 'available' },
-  { id: 'B3', status: 'occupied' },
-  { id: 'B4', status: 'available' },
-  { id: 'B5', status: 'occupied' },
-  { id: 'B6', status: 'available' }
-])
-
 const userName = computed(() => {
   if (isAuthenticated.value && user.value) {
     return user.value.name || user.value.email
   }
-  const localUser = JSON.parse(localStorage.getItem('user') || '{}')
-  return localUser.name || localUser.email || 'Estudiante'
+  return 'Estudiante'
 })
 
 const userInitials = computed(() => {
@@ -236,17 +241,52 @@ const userInitials = computed(() => {
   return name.substring(0, 2).toUpperCase()
 })
 
-const availableSpots = computed(() => 
+const availableSpots = computed(() =>
   parkingSpots.value.filter(s => s.status === 'available').length
 )
 
-const occupiedSpots = computed(() => 
+const occupiedSpots = computed(() =>
   parkingSpots.value.filter(s => s.status === 'occupied').length
 )
 
-const reservedSpots = computed(() => 
+const reservedSpots = computed(() =>
   parkingSpots.value.filter(s => s.status === 'reserved').length
 )
+
+const applySpotUpdate = (updatedSpot) => {
+  parkingSpots.value = mergeSpotUpdate(parkingSpots.value, updatedSpot)
+
+  if (
+    showModal.value &&
+    selectedSpot.value &&
+    selectedSpot.value.spaceNumber === updatedSpot.spaceNumber &&
+    updatedSpot.status === 'occupied'
+  ) {
+    errorMessage.value = `El parqueadero ${updatedSpot.spaceNumber} acaba de ser reservado por otro estudiante.`
+    closeModal()
+    return
+  }
+
+  if (
+    selectedSpot.value &&
+    selectedSpot.value.spaceNumber === updatedSpot.spaceNumber
+  ) {
+    selectedSpot.value = updatedSpot
+  }
+}
+
+const startParkingSpaceStream = () => {
+  if (!studentProfile.value) return
+
+  unsubscribeStream?.()
+  unsubscribeStream = subscribeParkingSpaceStream(
+    studentProfile.value.id,
+    applySpotUpdate,
+    () => {
+      /* reconexión silenciosa: el usuario puede refrescar manualmente si falla */
+    }
+  )
+}
 
 const getStatusText = (status) => {
   const texts = {
@@ -255,6 +295,22 @@ const getStatusText = (status) => {
     reserved: 'Reservado'
   }
   return texts[status]
+}
+
+const loadParkingSpaces = async () => {
+  if (!studentProfile.value) return
+
+  loading.value = true
+  errorMessage.value = ''
+  try {
+    parkingSpots.value = await fetchParkingSpaces(studentProfile.value.id)
+  } catch (error) {
+    errorMessage.value = error.response?.data?.messages?.[0]
+      || error.message
+      || 'No se pudieron cargar los parqueaderos'
+  } finally {
+    loading.value = false
+  }
 }
 
 const handleSpotClick = (spot) => {
@@ -273,55 +329,64 @@ const closeModal = () => {
   timeError.value = ''
 }
 
-const confirmAction = () => {
-  if (!selectedSpot.value) return
-  
-  const spot = parkingSpots.value.find(s => s.id === selectedSpot.value.id)
-  if (spot) {
-    if (spot.status === 'available') {
-      if (!plateNumber.value.trim()) {
-        plateError.value = 'Por favor ingresa la placa del vehículo'
-        return
-      }
-      if (plateNumber.value.trim().length < 4) {
-        plateError.value = 'La placa debe tener al menos 4 caracteres'
-        return
-      }
-      if (!startTime.value || !endTime.value) {
-        timeError.value = 'Por favor selecciona la hora de inicio y fin'
-        return
-      }
-      if (startTime.value >= endTime.value) {
-        timeError.value = 'La hora de fin debe ser mayor a la hora de inicio'
-        return
-      }
-      spot.status = 'reserved'
-      spot.plate = plateNumber.value.toUpperCase()
-      spot.startTime = startTime.value
-      spot.endTime = endTime.value
-    } else if (spot.status === 'reserved') {
-      spot.status = 'available'
-      spot.plate = null
-      spot.startTime = null
-      spot.endTime = null
+const confirmAction = async () => {
+  if (!selectedSpot.value || !studentProfile.value) return
+
+  if (selectedSpot.value.status === 'available') {
+    if (!plateNumber.value.trim()) {
+      plateError.value = 'Por favor ingresa la placa del vehículo'
+      return
     }
+    if (plateNumber.value.trim().length < 4) {
+      plateError.value = 'La placa debe tener al menos 4 caracteres'
+      return
+    }
+    if (!startTime.value || !endTime.value) {
+      timeError.value = 'Por favor selecciona la hora de inicio y fin'
+      return
+    }
+    if (startTime.value >= endTime.value) {
+      timeError.value = 'La hora de fin debe ser mayor a la hora de inicio'
+      return
+    }
+
+    loading.value = true
+    errorMessage.value = ''
+    try {
+      await reserveParkingSpace({
+        spaceNumber: selectedSpot.value.spaceNumber,
+        studentId: studentProfile.value.id,
+        studentName: studentProfile.value.name
+      })
+      closeModal()
+    } catch (error) {
+      errorMessage.value = error.response?.data?.messages?.[0]
+        || 'No se pudo reservar el parqueadero'
+    } finally {
+      loading.value = false
+    }
+    return
   }
+
   closeModal()
 }
 
 const handleLogout = () => {
-  if (isAuthenticated.value) {
-    logout({ logoutParams: { returnTo: window.location.origin } })
-  } else {
-    localStorage.removeItem('user')
-    router.push('/')
-  }
+  logout({ logoutParams: { returnTo: window.location.origin } })
 }
 
-onMounted(() => {
-  const localUser = localStorage.getItem('user')
-  if (!localUser && !isAuthenticated.value) {
-    // Si no hay usuario autenticado, permite el acceso para demo
-  }
+watch(
+  [isLoading, isAuthenticated, user],
+  ([loading, authenticated, authUser]) => {
+    if (!loading && authenticated && authUser) {
+      loadParkingSpaces()
+      startParkingSpaceStream()
+    }
+  },
+  { immediate: true }
+)
+
+onUnmounted(() => {
+  unsubscribeStream?.()
 })
 </script>
