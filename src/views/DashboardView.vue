@@ -189,6 +189,7 @@ import { useAuth0 } from '@auth0/auth0-vue'
 import {
   fetchParkingSpaces,
   reserveParkingSpace,
+  cancelParkingSpace,
   subscribeParkingSpaceStream,
   mergeSpotUpdate,
   mapSpot
@@ -369,6 +370,30 @@ const confirmAction = async () => {
       || error.response?.data?.message
       || error.message
       || 'No se pudo reservar el parqueadero'
+    } finally {
+      loading.value = false
+    }
+    return
+  }
+
+  if (selectedSpot.value.status === 'reserved') {
+    loading.value = true
+    errorMessage.value = ''
+    try {
+      const updatedSpot = await cancelParkingSpace({
+        spaceNumber: selectedSpot.value.spaceNumber,
+        studentId: studentProfile.value.id
+      })
+      parkingSpots.value = mergeSpotUpdate(
+        parkingSpots.value,
+        mapSpot(updatedSpot, studentProfile.value.id)
+      )
+      closeModal()
+    } catch (error) {
+      errorMessage.value = error.response?.data?.messages?.[0]
+        || error.response?.data?.message
+        || error.message
+        || 'No se pudo cancelar la reserva'
     } finally {
       loading.value = false
     }

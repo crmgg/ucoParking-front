@@ -43,6 +43,14 @@ export async function fetchParkingSpaces(currentStudentId) {
   return data.map((dto) => mapSpot(dto, currentStudentId))
 }
 
+export async function cancelParkingSpace({ spaceNumber, studentId }) {
+  const { data } = await api.post(`${BASE}/release`, {
+    spaceNumber,
+    studentId
+  })
+  return data
+}
+
 export async function reserveParkingSpace({ spaceNumber, studentId, studentName }) {
   const { data } = await api.post(`${BASE}/reserve`, {
     spaceNumber,
