@@ -190,7 +190,8 @@ import {
   fetchParkingSpaces,
   reserveParkingSpace,
   subscribeParkingSpaceStream,
-  mergeSpotUpdate
+  mergeSpotUpdate,
+  mapSpot
 } from '@/services/parkingService'
 
 const { user, isAuthenticated, isLoading, logout } = useAuth0()
@@ -353,15 +354,21 @@ const confirmAction = async () => {
     loading.value = true
     errorMessage.value = ''
     try {
-      await reserveParkingSpace({
+      const updatedSpot = await reserveParkingSpace({
         spaceNumber: selectedSpot.value.spaceNumber,
         studentId: studentProfile.value.id,
         studentName: studentProfile.value.name
       })
+      parkingSpots.value = mergeSpotUpdate(
+        parkingSpots.value,
+        mapSpot(updatedSpot, studentProfile.value.id)
+      )
       closeModal()
     } catch (error) {
-      errorMessage.value = error.response?.data?.messages?.[0]
-        || 'No se pudo reservar el parqueadero'
+    errorMessage.value = error.response?.data?.messages?.[0]
+      || error.response?.data?.message
+      || error.message
+      || 'No se pudo reservar el parqueadero'
     } finally {
       loading.value = false
     }
