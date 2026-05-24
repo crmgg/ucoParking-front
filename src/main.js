@@ -4,6 +4,7 @@ import { createAuth0, createAuthGuard } from '@auth0/auth0-vue'
 import App from './App.vue'
 import router from './router'
 import './styles/main.css'
+import { auth0SessionCache } from './services/auth0SessionCache'
 
 const domain = import.meta.env.VITE_AUTH0_DOMAIN?.trim()
 const clientId = import.meta.env.VITE_AUTH0_CLIENT_ID?.trim()
@@ -24,20 +25,28 @@ if (audience) {
   authorizationParams.audience = audience
 }
 
+// Sesiones antiguas en localStorage mezclaban todas las pestañas
+Object.keys(localStorage)
+  .filter((key) => key.startsWith('@@auth0spajs@@'))
+  .forEach((key) => localStorage.removeItem(key))
+
 const app = createApp(App)
 
 app.use(createPinia())
+app.use(router)
 
 app.use(
   createAuth0({
     domain: domain || '',
     clientId: clientId || '',
     authorizationParams,
-    cacheLocation: 'localstorage'
+    cache: auth0SessionCache,
+    useRefreshTokens: false,
+    onRedirectCallback(appState) {
+      router.push(appState?.target ?? '/dashboard')
+    }
   })
 )
-
-app.use(router)
 
 const authGuard = createAuthGuard(app, {
   redirectLoginOptions: {
