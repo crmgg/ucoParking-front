@@ -2,14 +2,12 @@ import api from './api'
 
 const BASE = '/uco-parking/v1/notifications'
 
-export async function sendWelcomeNotification({ recipient, studentName }) {
+async function sendEmailNotification({ templateCode, recipient, variables }) {
   const { data } = await api.post(`${BASE}/send`, {
-    templateCode: 'WELCOME_STUDENT',
+    templateCode,
     recipient,
     channel: 'EMAIL',
-    variables: {
-      studentName: studentName || 'Estudiante'
-    }
+    variables
   })
 
   if (data?.status !== 'SENT') {
@@ -17,4 +15,25 @@ export async function sendWelcomeNotification({ recipient, studentName }) {
   }
 
   return data
+}
+
+export async function sendWelcomeNotification({ recipient, studentName }) {
+  return sendEmailNotification({
+    templateCode: 'WELCOME_STUDENT',
+    recipient,
+    variables: {
+      studentName: studentName || 'Estudiante'
+    }
+  })
+}
+
+export async function sendReservationNotification({ recipient, studentName, spaceNumber }) {
+  return sendEmailNotification({
+    templateCode: 'RESERVATION_CONFIRMED',
+    recipient,
+    variables: {
+      studentName: studentName || 'Estudiante',
+      spaceNumber: String(spaceNumber)
+    }
+  })
 }

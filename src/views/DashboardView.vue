@@ -194,7 +194,7 @@ import {
   mergeSpotUpdate,
   mapSpot
 } from '@/services/parkingService'
-import { sendWelcomeNotification } from '@/services/notificationService'
+import { sendWelcomeNotification, sendReservationNotification } from '@/services/notificationService'
 import { resolveStudentEmail } from '@/services/studentEmail'
 
 const { user, isAuthenticated, isLoading, logout, getIdTokenClaims } = useAuth0()
@@ -364,12 +364,24 @@ const confirmAction = async () => {
         return
       }
 
+      const spaceNumber = selectedSpot.value.spaceNumber
       const updatedSpot = await reserveParkingSpace({
-        spaceNumber: selectedSpot.value.spaceNumber,
+        spaceNumber,
         studentId: studentProfile.value.id,
         studentName: studentProfile.value.name,
         studentEmail
       })
+
+      try {
+        await sendReservationNotification({
+          recipient: studentEmail,
+          studentName: studentProfile.value.name,
+          spaceNumber
+        })
+      } catch (error) {
+        console.warn('[UCO Parking] No se pudo enviar correo de reserva:', error?.message || error)
+      }
+
       parkingSpots.value = mergeSpotUpdate(
         parkingSpots.value,
         mapSpot(updatedSpot, studentProfile.value.id)
