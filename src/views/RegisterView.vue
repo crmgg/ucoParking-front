@@ -151,6 +151,7 @@ const handleRegister = async () => {
   try {
 
     const response = await api.post('/uco-parking/v1/students', {
+      name: name.value,
       email: email.value,
       idNumber: studentId.value,
       mobileNumber: '3000000000',
