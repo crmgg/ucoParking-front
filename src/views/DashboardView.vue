@@ -194,6 +194,7 @@ import {
   mergeSpotUpdate,
   mapSpot
 } from '@/services/parkingService'
+import { sendWelcomeNotification } from '@/services/notificationService'
 
 const { user, isAuthenticated, isLoading, logout } = useAuth0()
 
@@ -358,7 +359,8 @@ const confirmAction = async () => {
       const updatedSpot = await reserveParkingSpace({
         spaceNumber: selectedSpot.value.spaceNumber,
         studentId: studentProfile.value.id,
-        studentName: studentProfile.value.name
+        studentName: studentProfile.value.name,
+        studentEmail: studentProfile.value.email
       })
       parkingSpots.value = mergeSpotUpdate(
         parkingSpots.value,
@@ -407,12 +409,35 @@ const handleLogout = () => {
   logout({ logoutParams: { returnTo: window.location.origin } })
 }
 
+const sendWelcomeEmailOnce = async (profile) => {
+  if (!profile?.email) return
+
+  const storageKey = `uco-welcome-sent:${profile.id}`
+  if (sessionStorage.getItem(storageKey)) return
+
+  try {
+    await sendWelcomeNotification({
+      recipient: profile.email,
+      studentName: profile.name
+    })
+    sessionStorage.setItem(storageKey, '1')
+  } catch {
+    /* no bloquear el dashboard si falla el correo */
+  }
+}
+
 watch(
   [isLoading, isAuthenticated, user],
   ([loading, authenticated, authUser]) => {
     if (!loading && authenticated && authUser) {
+      const profile = {
+        id: authUser.sub,
+        name: authUser.name || authUser.email || 'Estudiante',
+        email: authUser.email
+      }
       loadParkingSpaces()
       startParkingSpaceStream()
+      sendWelcomeEmailOnce(profile)
     }
   },
   { immediate: true }

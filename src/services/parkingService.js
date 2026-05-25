@@ -51,11 +51,12 @@ export async function cancelParkingSpace({ spaceNumber, studentId }) {
   return data
 }
 
-export async function reserveParkingSpace({ spaceNumber, studentId, studentName }) {
+export async function reserveParkingSpace({ spaceNumber, studentId, studentName, studentEmail }) {
   const { data } = await api.post(`${BASE}/reserve`, {
     spaceNumber,
     studentId,
-    studentName
+    studentName,
+    studentEmail
   })
   return data
 }
