@@ -11,5 +11,10 @@ export async function sendWelcomeNotification({ recipient, studentName }) {
       studentName: studentName || 'Estudiante'
     }
   })
+
+  if (data?.status !== 'SENT') {
+    throw new Error(data?.detail || `Correo no enviado (${data?.status || 'ERROR'})`)
+  }
+
   return data
 }

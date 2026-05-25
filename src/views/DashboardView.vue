@@ -410,7 +410,10 @@ const handleLogout = () => {
 }
 
 const sendWelcomeEmailOnce = async (profile) => {
-  if (!profile?.email) return
+  if (!profile?.email) {
+    console.warn('[UCO Parking] Auth0 no devolvio email; no se envia bienvenida')
+    return
+  }
 
   const storageKey = `uco-welcome-sent:${profile.id}`
   if (sessionStorage.getItem(storageKey)) return
@@ -421,8 +424,8 @@ const sendWelcomeEmailOnce = async (profile) => {
       studentName: profile.name
     })
     sessionStorage.setItem(storageKey, '1')
-  } catch {
-    /* no bloquear el dashboard si falla el correo */
+  } catch (error) {
+    console.warn('[UCO Parking] No se pudo enviar correo de bienvenida:', error?.message || error)
   }
 }
 
