@@ -195,8 +195,9 @@ import {
   mapSpot
 } from '@/services/parkingService'
 import { sendWelcomeNotification } from '@/services/notificationService'
+import { resolveStudentEmail } from '@/services/studentEmail'
 
-const { user, isAuthenticated, isLoading, logout } = useAuth0()
+const { user, isAuthenticated, isLoading, logout, getIdTokenClaims } = useAuth0()
 
 const showModal = ref(false)
 const selectedSpot = ref(null)
@@ -356,11 +357,18 @@ const confirmAction = async () => {
     loading.value = true
     errorMessage.value = ''
     try {
+      const studentEmail = await resolveStudentEmail(user.value, getIdTokenClaims)
+      if (!studentEmail) {
+        errorMessage.value = 'No tenemos tu correo. Cierra sesion y vuelve a entrar con Auth0 (permiso email).'
+        loading.value = false
+        return
+      }
+
       const updatedSpot = await reserveParkingSpace({
         spaceNumber: selectedSpot.value.spaceNumber,
         studentId: studentProfile.value.id,
         studentName: studentProfile.value.name,
-        studentEmail: studentProfile.value.email
+        studentEmail
       })
       parkingSpots.value = mergeSpotUpdate(
         parkingSpots.value,
@@ -410,7 +418,8 @@ const handleLogout = () => {
 }
 
 const sendWelcomeEmailOnce = async (profile) => {
-  if (!profile?.email) {
+  const email = await resolveStudentEmail(user.value, getIdTokenClaims)
+  if (!email) {
     console.warn('[UCO Parking] Auth0 no devolvio email; no se envia bienvenida')
     return
   }
@@ -420,7 +429,7 @@ const sendWelcomeEmailOnce = async (profile) => {
 
   try {
     await sendWelcomeNotification({
-      recipient: profile.email,
+      recipient: email,
       studentName: profile.name
     })
     sessionStorage.setItem(storageKey, '1')

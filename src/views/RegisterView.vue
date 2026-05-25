@@ -107,6 +107,7 @@ import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth0 } from '@auth0/auth0-vue'
 import api from '@/services/api'
+import { rememberStudentEmail } from '@/services/studentEmail'
 
 const router = useRouter()
 const { loginWithRedirect } = useAuth0()
@@ -161,6 +162,7 @@ const handleRegister = async () => {
 
     console.log(response.data)
 
+    rememberStudentEmail(email.value)
     router.push('/dashboard')
 
   } catch (error) {
