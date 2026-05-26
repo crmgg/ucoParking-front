@@ -24,7 +24,11 @@ export function mapSpot(dto, currentStudentId) {
     spaceNumber: dto.spaceNumber,
     status: mapStatus(dto.status, dto.occupiedByStudentId, currentStudentId),
     occupiedByStudentId: dto.occupiedByStudentId,
-    occupiedByStudentName: dto.occupiedByStudentName
+    occupiedByStudentName: dto.occupiedByStudentName,
+    plate: dto.vehiclePlate,
+    startTime: dto.reservationStartTime,
+    endTime: dto.reservationEndTime,
+    reservationDate: dto.reservationDate
   }
 }
 
@@ -51,12 +55,23 @@ export async function cancelParkingSpace({ spaceNumber, studentId }) {
   return data
 }
 
-export async function reserveParkingSpace({ spaceNumber, studentId, studentName, studentEmail }) {
+export async function reserveParkingSpace({
+  spaceNumber,
+  studentId,
+  studentName,
+  studentEmail,
+  vehiclePlate,
+  reservationStartTime,
+  reservationEndTime
+}) {
   const { data } = await api.post(`${BASE}/reserve`, {
     spaceNumber,
     studentId,
     studentName,
-    studentEmail
+    studentEmail,
+    vehiclePlate,
+    reservationStartTime,
+    reservationEndTime
   })
   return data
 }

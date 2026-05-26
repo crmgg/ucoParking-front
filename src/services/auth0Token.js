@@ -1,5 +1,7 @@
 const audience = import.meta.env.VITE_AUTH0_AUDIENCE?.trim()
 
+import { hasTabAuth } from './tabAuthSession'
+
 let getAccessTokenSilently = null
 
 export function setAuth0TokenGetter(getter) {
@@ -7,6 +9,10 @@ export function setAuth0TokenGetter(getter) {
 }
 
 export async function getAccessToken() {
+  if (!hasTabAuth()) {
+    return null
+  }
+
   if (!getAccessTokenSilently) {
     throw new Error('Auth0 aún no está listo')
   }

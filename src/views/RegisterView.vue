@@ -103,14 +103,26 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { useAuth0 } from '@auth0/auth0-vue'
+import { getAuth0Audience } from '@/services/auth0Token'
+import { useTabAuth } from '@/composables/useTabAuth'
+import { markLoginPending } from '@/services/tabAuthSession'
 import api from '@/services/api'
-import { rememberStudentEmail } from '@/services/studentEmail'
 
 const router = useRouter()
-const { loginWithRedirect } = useAuth0()
+const { loginWithRedirect, isLoggedIn, isLoading } = useTabAuth()
+const audience = getAuth0Audience()
+
+watch(
+  [isLoading, isLoggedIn],
+  ([loading, loggedIn]) => {
+    if (!loading && loggedIn) {
+      router.replace({ name: 'dashboard' })
+    }
+  },
+  { immediate: true }
+)
 
 const name = ref('')
 const studentId = ref('')
@@ -152,7 +164,6 @@ const handleRegister = async () => {
   try {
 
     const response = await api.post('/uco-parking/v1/students', {
-      name: name.value,
       email: email.value,
       idNumber: studentId.value,
       mobileNumber: '3000000000',
@@ -162,7 +173,6 @@ const handleRegister = async () => {
 
     console.log(response.data)
 
-    rememberStudentEmail(email.value)
     router.push('/dashboard')
 
   } catch (error) {
@@ -170,15 +180,12 @@ const handleRegister = async () => {
   }
 }
 
-import { getAuth0Audience } from '@/services/auth0Token'
-
-const audience = getAuth0Audience()
-
 const registerWithAuth0 = () => {
+  markLoginPending()
   loginWithRedirect({
     authorizationParams: {
       scope: 'openid profile email',
-      prompt: 'select_account',
+      prompt: 'login',
       ...(audience ? { audience } : {}),
       screen_hint: 'signup'
     },

@@ -13,44 +13,32 @@
 
       <p v-if="authError" class="plate-error" style="margin-bottom: 1rem;">{{ authError }}</p>
 
-      <div v-if="isAuthenticated" class="session-active">
-        <p>Sesión activa como <strong>{{ userName }}</strong></p>
-        <button type="button" class="btn btn-primary" @click="goToDashboard">
-          Ir al panel de parqueadero
-        </button>
-        <button type="button" class="btn btn-secondary" @click="switchAccount">
-          Usar otra cuenta
-        </button>
-      </div>
-
-      <template v-else>
-        <form @submit.prevent="handleLogin">
-          <div class="form-group">
-            <label class="form-label">Correo Electrónico</label>
-            <input 
-              type="email" 
-              class="form-input" 
-              placeholder="estudiante@universidad.edu"
-              v-model="email"
-            />
-          </div>
-
-          <button type="submit" class="btn btn-primary">
-            Iniciar sesión con Auth0
-          </button>
-        </form>
-
-        <div class="auth-divider">
-          <span>o continúa con</span>
+      <form @submit.prevent="handleLogin">
+        <div class="form-group">
+          <label class="form-label">Correo Electrónico</label>
+          <input 
+            type="email" 
+            class="form-input" 
+            placeholder="estudiante@universidad.edu"
+            v-model="email"
+          />
         </div>
 
-        <button @click="loginWithAuth0()" class="btn btn-auth0">
-          <svg width="20" height="20" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
-            <path d="M55.97 45.2L45.2 8.03c-.55-1.9-2.59-3.03-4.49-2.48L8.03 16.3c-1.9.55-3.03 2.59-2.48 4.49l10.77 37.17c.55 1.9 2.59 3.03 4.49 2.48l32.68-10.75c1.9-.55 3.03-2.59 2.48-4.49z" fill="#EB5424"/>
-          </svg>
-          Continuar con Auth0
+        <button type="submit" class="btn btn-primary">
+          Iniciar sesión con Auth0
         </button>
-      </template>
+      </form>
+
+      <div class="auth-divider">
+        <span>o continúa con</span>
+      </div>
+
+      <button @click="loginWithAuth0()" class="btn btn-auth0">
+        <svg width="20" height="20" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+          <path d="M55.97 45.2L45.2 8.03c-.55-1.9-2.59-3.03-4.49-2.48L8.03 16.3c-1.9.55-3.03 2.59-2.48 4.49l10.77 37.17c.55 1.9 2.59 3.03 4.49 2.48l32.68-10.75c1.9-.55 3.03-2.59 2.48-4.49z" fill="#EB5424"/>
+        </svg>
+        Continuar con Auth0
+      </button>
 
       <p class="auth-footer">
         ¿No tienes una cuenta? 
@@ -61,24 +49,23 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useAuth0 } from '@auth0/auth0-vue'
 import { getAuth0Audience } from '@/services/auth0Token'
+import { useTabAuth } from '@/composables/useTabAuth'
+import { markLoginPending } from '@/services/tabAuthSession'
 
 const route = useRoute()
 const router = useRouter()
-const { loginWithRedirect, logout, isAuthenticated, user } = useAuth0()
+const { loginWithRedirect, isLoggedIn, isLoading } = useTabAuth()
 
 const audience = getAuth0Audience()
 const authError = ref('')
 const email = ref('')
 
-const userName = computed(() => user.value?.name || user.value?.email || 'Estudiante')
-
 const authorizationParams = {
   scope: 'openid profile email',
-  prompt: 'select_account',
+  prompt: 'login',
   ...(audience ? { audience } : {})
 }
 
@@ -95,19 +82,18 @@ onMounted(() => {
   }
 })
 
-const goToDashboard = () => {
-  router.push({ name: 'dashboard' })
-}
-
-const switchAccount = () => {
-  logout({
-    logoutParams: {
-      returnTo: window.location.origin
+watch(
+  [isLoading, isLoggedIn],
+  ([loading, loggedIn]) => {
+    if (!loading && loggedIn) {
+      router.replace({ name: 'dashboard' })
     }
-  })
-}
+  },
+  { immediate: true }
+)
 
 const loginWithAuth0 = (extraParams = {}) => {
+  markLoginPending()
   loginWithRedirect({
     authorizationParams: {
       ...authorizationParams,
@@ -121,18 +107,3 @@ const handleLogin = () => {
   loginWithAuth0(email.value ? { login_hint: email.value } : {})
 }
 </script>
-
-<style scoped>
-.session-active {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  margin-bottom: 1rem;
-}
-
-.session-active p {
-  margin: 0;
-  color: #475569;
-  text-align: center;
-}
-</style>

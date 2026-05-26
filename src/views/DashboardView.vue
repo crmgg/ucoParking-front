@@ -77,6 +77,7 @@
         </div>
 
         <p v-if="errorMessage" class="plate-error" style="margin-bottom: 1rem;">{{ errorMessage }}</p>
+        <p v-if="successMessage" class="success-message" style="margin-bottom: 1rem; color: #15803d;">{{ successMessage }}</p>
         <p v-if="loading && !parkingSpots.length" class="header-subtitle">Cargando parqueaderos...</p>
 
         <div class="parking-grid">
@@ -105,8 +106,8 @@
     <div v-if="showModal" class="modal-overlay" @click.self="closeModal">
       <div class="modal">
         <div class="modal-header">
-          <div class="modal-icon" :class="selectedSpot?.status === 'available' ? 'success' : 'warning'">
-            <svg v-if="selectedSpot?.status === 'available'" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <div class="modal-icon" :class="isReserveModal ? 'success' : 'warning'">
+            <svg v-if="isReserveModal" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
               <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
             </svg>
             <svg v-else xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -114,15 +115,15 @@
             </svg>
           </div>
           <h3 class="modal-title">
-            {{ selectedSpot?.status === 'available' ? 'Reservar Espacio' : 'Cancelar Reserva' }}
+            {{ isReserveModal ? 'Reservar Espacio' : 'Cancelar Reserva' }}
           </h3>
           <p class="modal-message">
-            {{ selectedSpot?.status === 'available' 
+            {{ isReserveModal
               ? `¿Deseas reservar el espacio ${selectedSpot?.id}? Una vez reservado, tendrás 30 minutos para ocuparlo.`
               : `¿Deseas cancelar tu reserva en el espacio ${selectedSpot?.id}?`
             }}
           </p>
-          <div v-if="selectedSpot?.status === 'available'" class="plate-input-container">
+          <div v-if="isReserveModal" class="plate-input-container">
             <label for="plate" class="plate-label">Placa del vehículo</label>
             <input 
               id="plate"
@@ -135,7 +136,7 @@
             />
             <span v-if="plateError" class="plate-error">{{ plateError }}</span>
           </div>
-          <div v-if="selectedSpot?.status === 'available'" class="time-selection">
+          <div v-if="isReserveModal" class="time-selection">
             <div class="time-field">
               <label for="startTime" class="plate-label">Hora de entrada</label>
               <select 
@@ -163,7 +164,7 @@
           </div>
           <span v-if="timeError" class="plate-error time-error">{{ timeError }}</span>
           <p class="parking-hours">Horario del parqueadero: 7:00 AM - 9:40 PM</p>
-          <div v-if="selectedSpot?.status === 'reserved' && selectedSpot?.plate" class="plate-display">
+          <div v-if="!isReserveModal && selectedSpot?.status === 'reserved' && selectedSpot?.plate" class="plate-display">
             <span class="plate-display-label">Placa registrada:</span>
             <span class="plate-display-value">{{ selectedSpot.plate }}</span>
             <div v-if="selectedSpot?.startTime && selectedSpot?.endTime" class="reservation-time-display">
@@ -173,9 +174,11 @@
           </div>
         </div>
         <div class="modal-actions">
-          <button @click="closeModal" class="btn btn-secondary" :disabled="loading">Cancelar</button>
+          <button @click="closeModal" class="btn btn-secondary" :disabled="loading">
+            {{ isReserveModal ? 'Cerrar' : 'Volver' }}
+          </button>
           <button @click="confirmAction" class="btn btn-primary" :disabled="loading">
-            {{ loading ? 'Procesando...' : (selectedSpot?.status === 'available' ? 'Reservar' : 'Confirmar') }}
+            {{ loading ? 'Procesando...' : (isReserveModal ? 'Reservar' : 'Confirmar cancelación') }}
           </button>
         </div>
       </div>
@@ -185,7 +188,8 @@
 
 <script setup>
 import { ref, computed, watch, onUnmounted } from 'vue'
-import { useAuth0 } from '@auth0/auth0-vue'
+import { useTabAuth } from '@/composables/useTabAuth'
+import { clearTabAuth } from '@/services/tabAuthSession'
 import {
   fetchParkingSpaces,
   reserveParkingSpace,
@@ -194,12 +198,13 @@ import {
   mergeSpotUpdate,
   mapSpot
 } from '@/services/parkingService'
-import { sendWelcomeNotification, sendReservationNotification } from '@/services/notificationService'
+import { sendWelcomeNotification } from '@/services/notificationService'
 import { resolveStudentEmail } from '@/services/studentEmail'
 
-const { user, isAuthenticated, isLoading, logout, getIdTokenClaims } = useAuth0()
+const { user, isLoggedIn, isLoading, logout, getIdTokenClaims } = useTabAuth()
 
 const showModal = ref(false)
+const modalAction = ref(null)
 const selectedSpot = ref(null)
 const plateNumber = ref('')
 const plateError = ref('')
@@ -208,11 +213,12 @@ const endTime = ref('')
 const timeError = ref('')
 const loading = ref(false)
 const errorMessage = ref('')
+const successMessage = ref('')
 const parkingSpots = ref([])
 let unsubscribeStream = null
 
 const studentProfile = computed(() => {
-  if (!isAuthenticated.value || !user.value) return null
+  if (!isLoggedIn.value || !user.value) return null
   return {
     id: user.value.sub,
     name: user.value.name || user.value.email || 'Estudiante',
@@ -229,7 +235,7 @@ const timeOptions = [
 ]
 
 const userName = computed(() => {
-  if (isAuthenticated.value && user.value) {
+  if (isLoggedIn.value && user.value) {
     return user.value.name || user.value.email
   }
   return 'Estudiante'
@@ -257,6 +263,8 @@ const reservedSpots = computed(() =>
   parkingSpots.value.filter(s => s.status === 'reserved').length
 )
 
+const isReserveModal = computed(() => modalAction.value === 'reserve')
+
 const applySpotUpdate = (updatedSpot) => {
   parkingSpots.value = mergeSpotUpdate(parkingSpots.value, updatedSpot)
 
@@ -273,7 +281,9 @@ const applySpotUpdate = (updatedSpot) => {
 
   if (
     selectedSpot.value &&
-    selectedSpot.value.spaceNumber === updatedSpot.spaceNumber
+    selectedSpot.value.spaceNumber === updatedSpot.spaceNumber &&
+    !loading.value &&
+    !showModal.value
   ) {
     selectedSpot.value = updatedSpot
   }
@@ -306,6 +316,7 @@ const loadParkingSpaces = async () => {
 
   loading.value = true
   errorMessage.value = ''
+  successMessage.value = ''
   try {
     parkingSpots.value = await fetchParkingSpaces(studentProfile.value.id)
   } catch (error) {
@@ -320,11 +331,13 @@ const loadParkingSpaces = async () => {
 const handleSpotClick = (spot) => {
   if (spot.status === 'occupied') return
   selectedSpot.value = spot
+  modalAction.value = spot.status === 'available' ? 'reserve' : 'cancel'
   showModal.value = true
 }
 
 const closeModal = () => {
   showModal.value = false
+  modalAction.value = null
   selectedSpot.value = null
   plateNumber.value = ''
   plateError.value = ''
@@ -336,7 +349,7 @@ const closeModal = () => {
 const confirmAction = async () => {
   if (!selectedSpot.value || !studentProfile.value) return
 
-  if (selectedSpot.value.status === 'available') {
+  if (modalAction.value === 'reserve') {
     if (!plateNumber.value.trim()) {
       plateError.value = 'Por favor ingresa la placa del vehículo'
       return
@@ -354,8 +367,22 @@ const confirmAction = async () => {
       return
     }
 
+    const normalizedPlate = plateNumber.value.trim().toUpperCase()
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' })
+    const plateTaken = parkingSpots.value.some(
+      (spot) =>
+        spot.status !== 'available' &&
+        spot.plate?.toUpperCase() === normalizedPlate &&
+        (!spot.reservationDate || spot.reservationDate === today)
+    )
+    if (plateTaken) {
+      plateError.value = 'Esta placa ya tiene una reserva activa hoy'
+      return
+    }
+
     loading.value = true
     errorMessage.value = ''
+    successMessage.value = ''
     try {
       const studentEmail = await resolveStudentEmail(user.value, getIdTokenClaims)
       if (!studentEmail) {
@@ -369,41 +396,42 @@ const confirmAction = async () => {
         spaceNumber,
         studentId: studentProfile.value.id,
         studentName: studentProfile.value.name,
-        studentEmail
+        studentEmail,
+        vehiclePlate: normalizedPlate,
+        reservationStartTime: startTime.value,
+        reservationEndTime: endTime.value
       })
-
-      try {
-        await sendReservationNotification({
-          recipient: studentEmail,
-          studentName: studentProfile.value.name,
-          spaceNumber
-        })
-      } catch (error) {
-        console.warn('[UCO Parking] No se pudo enviar correo de reserva:', error?.message || error)
-      }
 
       parkingSpots.value = mergeSpotUpdate(
         parkingSpots.value,
         mapSpot(updatedSpot, studentProfile.value.id)
       )
+
       closeModal()
+      successMessage.value = `Reserva exitosa. Espacio ${spaceNumber} (${startTime.value}-${endTime.value}). Te enviamos un correo de confirmacion a ${studentEmail}.`
     } catch (error) {
-    errorMessage.value = error.response?.data?.messages?.[0]
-      || error.response?.data?.message
-      || error.message
-      || 'No se pudo reservar el parqueadero'
+      const apiMessage = error.response?.data?.messages?.[0]
+        || error.response?.data?.message
+      if (apiMessage?.includes('vehiclePlate already reserved')) {
+        errorMessage.value = 'Esta placa ya tiene una reserva activa hoy'
+      } else {
+        errorMessage.value = apiMessage
+          || error.message
+          || 'No se pudo reservar el parqueadero'
+      }
     } finally {
       loading.value = false
     }
     return
   }
 
-  if (selectedSpot.value.status === 'reserved') {
+  if (modalAction.value === 'cancel') {
     loading.value = true
     errorMessage.value = ''
+    const spaceNumber = selectedSpot.value.spaceNumber
     try {
       const updatedSpot = await cancelParkingSpace({
-        spaceNumber: selectedSpot.value.spaceNumber,
+        spaceNumber,
         studentId: studentProfile.value.id
       })
       parkingSpots.value = mergeSpotUpdate(
@@ -411,6 +439,7 @@ const confirmAction = async () => {
         mapSpot(updatedSpot, studentProfile.value.id)
       )
       closeModal()
+      successMessage.value = `Reserva cancelada. El espacio ${spaceNumber} quedó disponible.`
     } catch (error) {
       errorMessage.value = error.response?.data?.messages?.[0]
         || error.response?.data?.message
@@ -426,6 +455,7 @@ const confirmAction = async () => {
 }
 
 const handleLogout = () => {
+  clearTabAuth()
   logout({ logoutParams: { returnTo: window.location.origin } })
 }
 
@@ -451,9 +481,9 @@ const sendWelcomeEmailOnce = async (profile) => {
 }
 
 watch(
-  [isLoading, isAuthenticated, user],
-  ([loading, authenticated, authUser]) => {
-    if (!loading && authenticated && authUser) {
+  [isLoading, isLoggedIn, user],
+  ([loading, loggedIn, authUser]) => {
+    if (!loading && loggedIn && authUser) {
       const profile = {
         id: authUser.sub,
         name: authUser.name || authUser.email || 'Estudiante',

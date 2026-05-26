@@ -13,7 +13,7 @@ api.interceptors.request.use(async (config) => {
     }
   } catch (error) {
     if (import.meta.env.DEV) {
-      console.warn('[Auth0] No se pudo obtener el token:', error?.message || error)
+      console.warn('[Auth0] Sin token API:', error?.message || error)
     }
   }
   return config
@@ -31,16 +31,8 @@ api.interceptors.response.use(
 
 export async function buildAuthHeaders(extraHeaders = {}) {
   const headers = { ...extraHeaders }
-  try {
-    const token = await getAccessToken()
-    if (token) {
-      headers.Authorization = `Bearer ${token}`
-    }
-  } catch (error) {
-    if (import.meta.env.DEV) {
-      console.warn('[Auth0] No se pudo obtener el token para stream:', error?.message || error)
-    }
-  }
+  const token = await getAccessToken()
+  headers.Authorization = `Bearer ${token}`
   return headers
 }
 

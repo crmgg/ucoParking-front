@@ -1,20 +1,31 @@
 <template>
-  <div v-if="isLoading" class="app-loading">Cargando…</div>
+  <div v-if="!appReady" class="app-loading">Cargando…</div>
   <router-view v-else />
 </template>
 
 <script setup>
-import { watch } from 'vue'
+import { ref, watch } from 'vue'
 import { useAuth0 } from '@auth0/auth0-vue'
 import { setAuth0TokenGetter } from '@/services/auth0Token'
+import { hasTabAuth } from '@/services/tabAuthSession'
 
-const { isLoading, getAccessTokenSilently } = useAuth0()
+const appReady = ref(false)
+const { isLoading, isAuthenticated, logout, getAccessTokenSilently } = useAuth0()
 
 watch(
-  isLoading,
-  (loading) => {
-    if (!loading) {
-      setAuth0TokenGetter((options) => getAccessTokenSilently(options))
+  [isLoading, isAuthenticated],
+  async ([loading, authenticated]) => {
+    if (loading) return
+
+    if (authenticated && !hasTabAuth()) {
+      await logout({ openUrl: false })
+    }
+
+    if (!authenticated || hasTabAuth()) {
+      if (hasTabAuth()) {
+        setAuth0TokenGetter((options) => getAccessTokenSilently(options))
+      }
+      appReady.value = true
     }
   },
   { immediate: true }
