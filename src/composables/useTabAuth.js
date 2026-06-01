@@ -11,11 +11,19 @@ export function useTabAuth() {
       isAuthenticated: computed(() => hasTabAuth()),
       isLoading: ref(false),
       isLoggedIn: computed(() => hasTabAuth()),
-      user: ref({ name: 'Estudiante demo', email: 'demo@uco.edu.co' }),
+      user: ref({
+        sub: 'demo-estudiante-uco',
+        name: 'Estudiante demo',
+        email: 'demo@uco.edu.co'
+      }),
       loginWithRedirect: async () => {},
       logout: async () => {},
       getAccessTokenSilently: async () => '',
-      getIdTokenClaims: async () => ({ name: 'Estudiante demo' })
+      getIdTokenClaims: async () => ({
+        sub: 'demo-estudiante-uco',
+        name: 'Estudiante demo',
+        email: 'demo@uco.edu.co'
+      })
     }
   }
 

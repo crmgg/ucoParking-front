@@ -220,9 +220,9 @@ let unsubscribeStream = null
 const studentProfile = computed(() => {
   if (!isLoggedIn.value || !user.value) return null
   return {
-    id: user.value.sub,
+    id: user.value.sub || 'demo-estudiante-uco',
     name: user.value.name || user.value.email || 'Estudiante',
-    email: user.value.email
+    email: user.value.email || 'demo@uco.edu.co'
   }
 })
 
@@ -296,8 +296,15 @@ const startParkingSpaceStream = () => {
   unsubscribeStream = subscribeParkingSpaceStream(
     studentProfile.value.id,
     applySpotUpdate,
-    () => {
-      /* reconexión silenciosa: el usuario puede refrescar manualmente si falla */
+    {
+      onReconnect: () => {
+        loadParkingSpaces({ silent: true })
+      },
+      onError: (error) => {
+        if (import.meta.env.DEV) {
+          console.warn('[UCO Parking] Stream desconectado, reintentando...', error?.message || error)
+        }
+      }
     }
   )
 }
@@ -311,20 +318,26 @@ const getStatusText = (status) => {
   return texts[status]
 }
 
-const loadParkingSpaces = async () => {
+const loadParkingSpaces = async ({ silent = false } = {}) => {
   if (!studentProfile.value) return
 
-  loading.value = true
-  errorMessage.value = ''
-  successMessage.value = ''
+  if (!silent) {
+    loading.value = true
+    errorMessage.value = ''
+    successMessage.value = ''
+  }
   try {
     parkingSpots.value = await fetchParkingSpaces(studentProfile.value.id)
   } catch (error) {
-    errorMessage.value = error.response?.data?.messages?.[0]
-      || error.message
-      || 'No se pudieron cargar los parqueaderos'
+    if (!silent) {
+      errorMessage.value = error.response?.data?.messages?.[0]
+        || error.message
+        || 'No se pudieron cargar los parqueaderos'
+    }
   } finally {
-    loading.value = false
+    if (!silent) {
+      loading.value = false
+    }
   }
 }
 
