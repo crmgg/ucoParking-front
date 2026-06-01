@@ -1,0 +1,7 @@
+{
+  "name": "uco-parking-api-proxy",
+  "private": true,
+  "dependencies": {
+    "http-proxy": "^1.18.1"
+  }
+}

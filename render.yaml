@@ -1,0 +1,28 @@
+# Blueprint Render — front HTTPS + proxy HTTPS hacia la VM (API en :8000)
+# Repo: crmgg/ucoParking-front  rama: feature/notification-gateway
+
+services:
+  - type: web
+    name: uco-parking-api-proxy
+    runtime: docker
+    rootDir: render-proxy
+    plan: free
+    healthCheckPath: /uco-parking/actuator/health
+    envVars:
+      - key: VM_API_UPSTREAM
+        value: http://34.132.122.87:8000
+
+  - type: web
+    name: uco-parking-front
+    runtime: static
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_AUTH0_DOMAIN
+        value: dev-oh62f3hilgh8p2rj.us.auth0.com
+      - key: VITE_AUTH0_CLIENT_ID
+        sync: false
+      - key: VITE_AUTH0_AUDIENCE
+        value: https://uco-parking-api
+      - key: VITE_API_BASE_URL
+        sync: false
