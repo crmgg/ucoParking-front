@@ -130,11 +130,14 @@
               v-model="plateNumber"
               type="text"
               class="plate-input"
-              placeholder="Ej: ABC123"
-              maxlength="7"
-              @input="plateError = ''"
+              placeholder="ABC123 o ABC12D"
+              maxlength="6"
+              @input="onPlateInput"
             />
             <span v-if="plateError" class="plate-error">{{ plateError }}</span>
+            <p v-else class="auth-subtitle" style="margin-top: 0.5rem; font-size: 13px;">
+              {{ PLATE_FORMAT_HINT }}
+            </p>
           </div>
           <div v-if="isReserveModal" class="time-selection">
             <div class="time-field">
@@ -200,6 +203,7 @@ import {
 } from '@/services/parkingService'
 import { sendWelcomeNotification } from '@/services/notificationService'
 import { resolveStudentEmail } from '@/services/studentEmail'
+import { normalizePlate, validatePlateInput, PLATE_FORMAT_HINT } from '@/utils/plateValidation'
 
 const { user, isLoggedIn, isLoading, logout, getIdTokenClaims } = useTabAuth()
 
@@ -318,6 +322,11 @@ const getStatusText = (status) => {
   return texts[status]
 }
 
+const onPlateInput = () => {
+  plateNumber.value = plateNumber.value.toUpperCase().replace(/[^A-Z0-9]/g, '')
+  plateError.value = ''
+}
+
 const loadParkingSpaces = async ({ silent = false } = {}) => {
   if (!studentProfile.value) return
 
@@ -363,12 +372,9 @@ const confirmAction = async () => {
   if (!selectedSpot.value || !studentProfile.value) return
 
   if (modalAction.value === 'reserve') {
-    if (!plateNumber.value.trim()) {
-      plateError.value = 'Por favor ingresa la placa del vehículo'
-      return
-    }
-    if (plateNumber.value.trim().length < 4) {
-      plateError.value = 'La placa debe tener al menos 4 caracteres'
+    const plateValidationError = validatePlateInput(plateNumber.value)
+    if (plateValidationError) {
+      plateError.value = plateValidationError
       return
     }
     if (!startTime.value || !endTime.value) {
@@ -380,7 +386,7 @@ const confirmAction = async () => {
       return
     }
 
-    const normalizedPlate = plateNumber.value.trim().toUpperCase()
+    const normalizedPlate = normalizePlate(plateNumber.value)
     const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' })
     const plateTaken = parkingSpots.value.some(
       (spot) =>
@@ -427,6 +433,8 @@ const confirmAction = async () => {
         || error.response?.data?.message
       if (apiMessage?.includes('vehiclePlate already reserved')) {
         errorMessage.value = 'Esta placa ya tiene una reserva activa hoy'
+      } else if (apiMessage?.includes('Placa invalida') || apiMessage?.includes('vehiclePlate format')) {
+        errorMessage.value = apiMessage
       } else {
         errorMessage.value = apiMessage
           || error.message
