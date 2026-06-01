@@ -13,6 +13,21 @@
 
       <p v-if="authError" class="plate-error" style="margin-bottom: 1rem;">{{ authError }}</p>
 
+      <p v-if="httpDemoMode" class="auth-subtitle" style="margin-bottom: 1rem;">
+        Demo en HTTP (sin Auth0). En Render con HTTPS podrás usar login real.
+      </p>
+
+      <button
+        v-if="httpDemoMode"
+        type="button"
+        class="btn btn-primary"
+        style="margin-bottom: 1rem; width: 100%;"
+        @click="enterDemo"
+      >
+        Entrar al parqueadero
+      </button>
+
+      <template v-if="!httpDemoMode">
       <form @submit.prevent="handleLogin">
         <div class="form-group">
           <label class="form-label">Correo Electrónico</label>
@@ -33,7 +48,7 @@
         <span>o continúa con</span>
       </div>
 
-      <button @click="loginWithAuth0()" class="btn btn-auth0">
+      <button type="button" @click="loginWithAuth0()" class="btn btn-auth0">
         <svg width="20" height="20" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
           <path d="M55.97 45.2L45.2 8.03c-.55-1.9-2.59-3.03-4.49-2.48L8.03 16.3c-1.9.55-3.03 2.59-2.48 4.49l10.77 37.17c.55 1.9 2.59 3.03 4.49 2.48l32.68-10.75c1.9-.55 3.03-2.59 2.48-4.49z" fill="#EB5424"/>
         </svg>
@@ -44,6 +59,7 @@
         ¿No tienes una cuenta? 
         <router-link to="/register">Regístrate aquí</router-link>
       </p>
+      </template>
     </div>
   </div>
 </template>
@@ -53,7 +69,8 @@ import { ref, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getAuth0Audience } from '@/services/auth0Token'
 import { useTabAuth } from '@/composables/useTabAuth'
-import { markLoginPending } from '@/services/tabAuthSession'
+import { markLoginPending, activateTabAuth } from '@/services/tabAuthSession'
+import { httpDemoMode } from '@/config/httpDemo'
 
 const route = useRoute()
 const router = useRouter()
@@ -105,5 +122,10 @@ const loginWithAuth0 = (extraParams = {}) => {
 
 const handleLogin = () => {
   loginWithAuth0(email.value ? { login_hint: email.value } : {})
+}
+
+const enterDemo = () => {
+  activateTabAuth()
+  router.push({ name: 'dashboard' })
 }
 </script>
