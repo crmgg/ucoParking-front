@@ -220,6 +220,8 @@ const errorMessage = ref('')
 const successMessage = ref('')
 const parkingSpots = ref([])
 let unsubscribeStream = null
+let pollTimer = null
+const POLL_INTERVAL_MS = 3000
 
 const studentProfile = computed(() => {
   if (!isLoggedIn.value || !user.value) return null
@@ -291,6 +293,15 @@ const applySpotUpdate = (updatedSpot) => {
   ) {
     selectedSpot.value = updatedSpot
   }
+}
+
+const startParkingSpacePolling = () => {
+  if (pollTimer) {
+    clearInterval(pollTimer)
+  }
+  pollTimer = setInterval(() => {
+    loadParkingSpaces({ silent: true })
+  }, POLL_INTERVAL_MS)
 }
 
 const startParkingSpaceStream = () => {
@@ -512,6 +523,7 @@ watch(
       }
       loadParkingSpaces()
       startParkingSpaceStream()
+      startParkingSpacePolling()
       sendWelcomeEmailOnce(profile)
     }
   },
@@ -520,5 +532,9 @@ watch(
 
 onUnmounted(() => {
   unsubscribeStream?.()
+  if (pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
 })
 </script>
