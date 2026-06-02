@@ -43,7 +43,9 @@ export function mergeSpotUpdate(spots, updatedSpot) {
 }
 
 export async function fetchParkingSpaces(currentStudentId) {
-  const { data } = await api.get(BASE)
+  const { data } = await api.get(BASE, {
+    params: { _: Date.now() }
+  })
   return data.map((dto) => mapSpot(dto, currentStudentId))
 }
 
@@ -76,11 +78,27 @@ export async function reserveParkingSpace({
   return data
 }
 
-export function subscribeParkingSpaceStream(currentStudentId, onUpdate, onError) {
-  const controller = new AbortController()
+const STREAM_RECONNECT_MS = 3000
+
+export function subscribeParkingSpaceStream(currentStudentId, onUpdate, options = {}) {
+  const { onError, onReconnect } = typeof options === 'function' ? { onError: options } : options
+  let aborted = false
+  let reconnectTimer = null
+  let hadConnected = false
+  let controller = null
   const baseURL = import.meta.env.VITE_API_BASE_URL || ''
 
-  ;(async () => {
+  const scheduleReconnect = () => {
+    if (aborted) return
+    reconnectTimer = setTimeout(connect, STREAM_RECONNECT_MS)
+  }
+
+  const connect = async () => {
+    if (aborted) return
+
+    controller?.abort()
+    controller = new AbortController()
+
     try {
       const headers = await buildAuthHeaders({
         Accept: 'application/x-ndjson'
@@ -95,11 +113,16 @@ export function subscribeParkingSpaceStream(currentStudentId, onUpdate, onError)
         throw new Error('No se pudo conectar al stream de parqueaderos')
       }
 
+      if (hadConnected) {
+        onReconnect?.()
+      }
+      hadConnected = true
+
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
       let buffer = ''
 
-      while (true) {
+      while (!aborted) {
         const { done, value } = await reader.read()
         if (done) break
 
@@ -114,11 +137,22 @@ export function subscribeParkingSpaceStream(currentStudentId, onUpdate, onError)
           onUpdate(mapSpot(dto, currentStudentId))
         }
       }
-    } catch (error) {
-      if (error.name === 'AbortError') return
-      onError?.(error)
-    }
-  })()
 
-  return () => controller.abort()
+      if (!aborted) {
+        scheduleReconnect()
+      }
+    } catch (error) {
+      if (error.name === 'AbortError' || aborted) return
+      onError?.(error)
+      scheduleReconnect()
+    }
+  }
+
+  connect()
+
+  return () => {
+    aborted = true
+    clearTimeout(reconnectTimer)
+    controller?.abort()
+  }
 }
